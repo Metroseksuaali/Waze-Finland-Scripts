@@ -53,12 +53,15 @@ HTML-työkalu, joka analysoi XLSM/XLSX-tiedostoja ja etsii niistä koordinaattej
 
 ## Asennus
 
-Skriptien käyttö vaatii käyttäjäskriptilaajennuksen kuten Tampermonkey. Yksityiskohtaiset asennusohjeet löytyvät dokumentaatiosta:
+Skriptien käyttö vaatii käyttäjäskriptilaajennuksen. Yksityiskohtaiset asennusohjeet löytyvät dokumentaatiosta:
 
 **[Aloitusopas](docs/getting-started.md)**
 
 Pika-asennus:
-1. Asenna [Tampermonkey](https://www.tampermonkey.net/) selaimeesi
+1. Asenna jokin seuraavista käyttäjäskriptilaajennuksista selaimeesi:
+   - [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Firefox, Edge, Safari, Opera)
+   - [Violentmonkey](https://violentmonkey.github.io/) (Chrome, Firefox, Edge)
+   - [Greasemonkey](https://www.greasespot.net/) (Firefox)
 2. Klikkaa haluamasi skriptin Greasy Fork -linkkiä yllä
 3. Paina "Install this script"
 
