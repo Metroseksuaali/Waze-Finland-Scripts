@@ -40,10 +40,6 @@ Pika-asennus:
 2. Klikkaa haluamasi skriptin Greasy Fork -linkkiä yllä
 3. Paina "Install this script"
 
-## Dokumentaatio
-
-Kattava dokumentaatio, käyttöohjeet ja kehitysoppaat löytyvät **[docs/](docs/)** -kansiosta.
-
 ## Kontribuutio
 
 Yhteisön kontribuutiot ovat tervetulleita! Voit osallistua:
