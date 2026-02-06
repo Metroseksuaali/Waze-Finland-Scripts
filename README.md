@@ -46,7 +46,7 @@ Yhteisön kontribuutiot ovat tervetulleita! Voit osallistua:
 
 - Raportoimalla bugeja tai ehdottamalla uusia ominaisuuksia [Issues](https://github.com/Metroseksuaali/Waze-Finland-Scripts/issues) -osiossa
 - Lähettämällä pull requesteja parannusehdotuksista tai uusista skripteistä
-- Jakamalla palautetta ja käyttökokemuksia
+- Jakamalla palautetta ja käyttökokemuksia [Waze Finland Discordissa](https://discord.gg/8SAVDDT7RU)
 
 
 ## Kiitokset
