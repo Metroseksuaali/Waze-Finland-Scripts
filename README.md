@@ -47,7 +47,3 @@ Yhteisön kontribuutiot ovat tervetulleita! Voit osallistua:
 - Raportoimalla bugeja tai ehdottamalla uusia ominaisuuksia [Issues](https://github.com/Metroseksuaali/Waze-Finland-Scripts/issues) -osiossa
 - Lähettämällä pull requesteja parannusehdotuksista tai uusista skripteistä
 - Jakamalla palautetta ja käyttökokemuksia
-
-## Lisenssi
-
-Tämä projekti on lisensoitu [MIT-lisenssillä](LICENSE).
