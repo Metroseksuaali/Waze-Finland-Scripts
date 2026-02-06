@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Etäisyysanalyysi koordinaateille</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0 auto;
+            padding: 5px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 5px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #4a5568;
+            font-size: 2.2em;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .input-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 10px;
+            border: 2px dashed #cbd5e0;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #2d3748;
+        }
+
+        input[type="file"] {
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            background: white;
+            transition: all 0.3s ease;
+        }
+
+        input[type="file"]:hover {
+            border-color: #667eea;
+        }
+
+        input[type="number"] {
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .reference-point {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+            align-items: end;
+        }
+
+        button {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .results {
+            margin-top: 30px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .export-section {
+            margin-bottom: 20px;
+            padding: 20px;
+            background: #f0f9ff;
+            border-radius: 10px;
+            border: 2px solid #0284c7;
+        }
+
+        .export-buttons {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .export-info {
+            flex: 1;
+            color: #0369a1;
+            font-weight: 500;
+        }
+
+        .kml-button {
+            background: linear-gradient(45deg, #0284c7, #0369a1);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(2, 132, 199, 0.3);
+        }
+
+        .kml-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(2, 132, 199, 0.4);
+        }
+
+        .kml-button:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .results-table {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        table {
+            table-layout: auto;
+            width: 100%;
+        }
+
+        th,
+        td {
+            overflow-wrap: break-word;
+            word-break: break-word;
+        }
+
+        th:nth-child(1),
+        td:nth-child(1) {
+            min-width: 25px;
+            max-width: 25px;
+        }
+
+        th:nth-child(2),
+        td:nth-child(2) {
+            min-width: 83px;
+            max-width: 10ch;
+        }
+
+        th:nth-child(3),
+        td:nth-child(3) {
+            min-width: 35px;
+            max-width: 35px;
+        }
+
+        th:nth-child(4),
+        td:nth-child(4) {
+            min-width: 35px;
+            max-width: 15ch;
+        }
+
+        th:nth-child(5),
+        td:nth-child(5) {
+            min-width: 35px;
+            max-width: 28ch;
+        }
+
+        th:nth-child(6),
+        td:nth-child(6) {
+            min-width: 5px;
+            max-width: 15ch;
+        }
+
+        th:nth-child(7),
+        td:nth-child(7) {
+            min-width: 5px;
+            max-width: 25ch;
+        }
+
+        th:nth-child(8),
+        td:nth-child(8) {
+            min-width: 1ch;
+            max-width: 30ch;
+        }
+
+        th:nth-child(9),
+        td:nth-child(9) {
+            min-width: 1ch;
+            max-width: 10ch;
+        }
+
+        th:nth-child(10),
+        td:nth-child(10) {
+            min-width: 40px;
+            max-width: 200px;
+        }
+
+        th:nth-child(11),
+        td:nth-child(11) {
+            min-width: 40px;
+            max-width: 200px;
+        }
+
+        th:nth-child(12),
+        td:nth-child(12) {
+            min-width: 25px;
+            max-width: 5ch;
+        }
+
+        th {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 5px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.9em;
+        }
+
+        td {
+            padding: 5px 5px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 0.85em;
+        }
+
+        tr:hover {
+            background: #f8fafc;
+        }
+
+        .distance {
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .coordinates {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #4a5568;
+        }
+
+        .error {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #e53e3e;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #667eea;
+            font-size: 1.2em;
+        }
+
+        @media (max-width: 768px) {
+            .input-section {
+                grid-template-columns: 1fr;
+            }
+
+            .reference-point {
+                grid-template-columns: 1fr;
+            }
+
+            .export-buttons {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            table {
+                font-size: 0.5em;
+            }
+
+            th,
+            td {
+                padding: 5px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Etäisyysanalyysi koordinaateille</h1>
+            <p>Lataa XLSM-tiedostosi ja löydä lähimmät sijainnit vertailupisteestäsi</p>
+        </div>
+
+        <div class="input-section">
+            <div class="input-group">
+                <label for="fileInput">📄 Valitse XLSM-tiedosto:</label>
+                <input type="file" id="fileInput" accept=".xlsm,.xlsx,.xls">
+            </div>
+
+            <div class="input-group">
+                <label for="maxDistance">🎯 Maksimietäisyys (km):</label>
+                <input type="number" id="maxDistance" value="10" min="0.1" step="0.1">
+            </div>
+
+            <div class="reference-point">
+                <div class="input-group">
+                    <label for="refLat">📍 Vertailuleveysaste:</label>
+                    <input type="number" id="refLat" step="0.000001"
+                        placeholder="esim. 61.0552355924 (Weberin piste 2024)">
+                </div>
+
+                <div class="input-group">
+                    <label for="refLon">📍 Vertailupituusaste:</label>
+                    <input type="number" id="refLon" step="0.000001"
+                        placeholder="esim. 24.6533912958 (Weberin piste 2024)">
+                </div>
+
+                <button onclick="generateRandomCoord()">🎲 Satunnainen piste Suomessa</button>
+
+                <button onclick="analyzeFile()">🔍 Analysoi etäisyydet</button>
+            </div>
+        </div>
+
+        <div id="results" class="results"></div>
+    </div>
+
+    <script>
+        let extractedData = [];
+        let currentFilteredData = [];
+
+        const LAT_MIN = 59.8;
+        const LAT_MAX = 70.1;
+        const LON_MIN = 19.0;
+        const LON_MAX = 31.6;
+
+        function generateRandomCoord() {
+            const lat = LAT_MIN + Math.random() * (LAT_MAX - LAT_MIN);
+            const lon = LON_MIN + Math.random() * (LON_MAX - LON_MIN);
+            document.getElementById('refLat').value = lat.toFixed(6);
+            document.getElementById('refLon').value = lon.toFixed(6);
+        }
+
+        function getToiminnallinenLuokkaDescription(luokkaNumber) {
+            const luokkaMap = {
+                '1': 'Valtatie tai seudullinen pääkatu',
+                '2': 'Kantatie tai seudullinen pääkatu',
+                '3': 'Seututie tai alueellinen pääkatu',
+                '4': 'Yhdystie tai kokoojakatu',
+                '5': 'Liityntäkatu tai tärkeä yksityistie',
+                '6': 'Muu yksityistie',
+                '7': 'Ajopolku',
+                '8': 'Kevyen liikenteen väylä'
+            };
+            
+            const trimmed = (luokkaNumber || '').toString().trim();
+            return luokkaMap[trimmed] || 'Ei määritelty';
+        }
+
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        function extractCoordinates(text) {
+            const latMatch = text.match(/&lat=([0-9.-]+)/);
+            const lonMatch = text.match(/&lon=([0-9.-]+)/);
+
+            if (latMatch && lonMatch) {
+                return {
+                    lat: parseFloat(latMatch[1]),
+                    lon: parseFloat(lonMatch[1])
+                };
+            }
+            return null;
+        }
+
+        function processExcelFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+
+                        let allData = [];
+
+                        workbook.SheetNames.forEach(sheetName => {
+                            const worksheet = workbook.Sheets[sheetName];
+                            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                            jsonData.forEach((row, rowIndex) => {
+                                row.forEach((cell, colIndex) => {
+                                    if (typeof cell === 'string' && cell.includes('&lat=') && cell.includes('&lon=')) {
+                                        const coords = extractCoordinates(cell);
+                                        if (coords) {
+                                            let adjacentUrl = '';
+                                            for (let adjCol = 0; adjCol < row.length; adjCol++) {
+                                                if (adjCol !== colIndex && typeof row[adjCol] === 'string' &&
+                                                    (row[adjCol].includes('http') || row[adjCol].includes('www.'))) {
+                                                    adjacentUrl = row[adjCol];
+                                                    break;
+                                                }
+                                            }
+
+                                            const kaupunkiFIN = (colIndex >= 6 && row[colIndex - 6]) ? row[colIndex - 6] : '';
+                                            const katuFIN = (colIndex >= 7 && row[colIndex - 7]) ? row[colIndex - 7] : '';
+                                            const kaupunkiSWE = (colIndex >= 4 && row[colIndex - 4]) ? row[colIndex - 4] : '';
+                                            const katuSWE = (colIndex >= 5 && row[colIndex - 5]) ? row[colIndex - 5] : '';
+                                            const toimenpide = (colIndex >= 3 && row[colIndex - 3]) ? row[colIndex - 3] : '';
+                                            const toiminnallinenLuokka = (colIndex + 2 < row.length && row[colIndex + 2]) ? row[colIndex + 2] : '';
+
+                                            allData.push({
+                                                sheet: sheetName,
+                                                row: rowIndex + 1,
+                                                col: String.fromCharCode(65 + colIndex),
+                                                lat: coords.lat,
+                                                lon: coords.lon,
+                                                originalText: cell,
+                                                adjacentUrl: adjacentUrl,
+                                                kaupunkiFIN: kaupunkiFIN,
+                                                katuFIN: katuFIN,
+                                                kaupunkiSWE: kaupunkiSWE,
+                                                katuSWE: katuSWE,
+                                                toimenpide: toimenpide,
+                                                toiminnallinenLuokka: toiminnallinenLuokka
+                                            });
+                                        }
+                                    }
+                                });
+                            });
+                        });
+
+                        resolve(allData);
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                reader.onerror = () => reject(new Error('Failed to read file'));
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        function makeClickableUrl(url) {
+            if (!url) return 'Ei saatavilla';
+
+            if (url.startsWith('http://') || url.startsWith('https://')) {
+                return `<a href="${url}" target="_blank" style="color: #667eea; text-decoration: none; font-weight: 500;">${url.length > 60 ? url.substring(0, 60) + '...' : url}</a>`;
+            }
+            else if (url.startsWith('www.')) {
+                return `<a href="https://${url}" target="_blank" style="color: #667eea; text-decoration: none; font-weight: 500;">${url.length > 60 ? url.substring(0, 60) + '...' : url}</a>`;
+            }
+            else if (url.includes('.')) {
+                return `<a href="https://${url}" target="_blank" style="color: #667eea; text-decoration: none; font-weight: 500;">${url.length > 60 ? url.substring(0, 60) + '...' : url}</a>`;
+            }
+
+            return url.length > 60 ? url.substring(0, 60) + '...' : url;
+        }
+
+        function updateKMLCount() {
+            if (currentFilteredData.length === 0) {
+                document.getElementById('kml_count').textContent = '0';
+                document.getElementById('kml_download_btn').disabled = true;
+                return;
+            }
+
+            const filteredData = getFilteredDataForKML(currentFilteredData);
+            document.getElementById('kml_count').textContent = filteredData.length;
+            document.getElementById('kml_download_btn').disabled = filteredData.length === 0;
+        }
+
+        function getFilteredDataForKML(data) {
+            const filters = {
+                empty: document.getElementById('filter_empty')?.checked || false,
+                ei_toimenpiteita: document.getElementById('filter_ei_toimenpiteita')?.checked || false,
+                korjausehdotus: document.getElementById('filter_korjausehdotus')?.checked || false,
+                raportoitu: document.getElementById('filter_raportoitu')?.checked || false,
+                korjattu: document.getElementById('filter_korjattu')?.checked || false,
+                jatkoseuranta: document.getElementById('filter_jatkoseuranta')?.checked || false,
+                // Toiminnallinen luokka filters
+                luokka_empty: document.getElementById('filter_luokka_empty')?.checked || false,
+                luokka_1: document.getElementById('filter_luokka_1')?.checked || false,
+                luokka_2: document.getElementById('filter_luokka_2')?.checked || false,
+                luokka_3: document.getElementById('filter_luokka_3')?.checked || false,
+                luokka_4: document.getElementById('filter_luokka_4')?.checked || false,
+                luokka_5: document.getElementById('filter_luokka_5')?.checked || false,
+                luokka_6: document.getElementById('filter_luokka_6')?.checked || false,
+                luokka_7: document.getElementById('filter_luokka_7')?.checked || false,
+                luokka_8: document.getElementById('filter_luokka_8')?.checked || false,
+                luokka_9: document.getElementById('filter_luokka_9')?.checked || false
+            };
+
+            return data.filter(item => {
+                const toimenpide = (item.toimenpide || '').trim();
+                const toiminnallinenLuokka = (item.toiminnallinenLuokka || '').toString().trim();
+
+                // Check toimenpide filters
+                let toimenpideMatch = false;
+                if (filters.empty && (toimenpide === '' || toimenpide === '-')) toimenpideMatch = true;
+                if (filters.ei_toimenpiteita && toimenpide === 'Ei toimenpiteitä') toimenpideMatch = true;
+                if (filters.korjausehdotus && toimenpide === 'Korjausehdotus WME') toimenpideMatch = true;
+                if (filters.raportoitu && toimenpide === 'Raportoitu WEB käyttöliittymässä') toimenpideMatch = true;
+                if (filters.korjattu && toimenpide === 'Korjattu WME') toimenpideMatch = true;
+                if (filters.jatkoseuranta && toimenpide === 'Jatkoseuranta') toimenpideMatch = true;
+
+                // Check toiminnallinen luokka filters
+                let luokkaMatch = false;
+                if (filters.luokka_empty && (toiminnallinenLuokka === '' || toiminnallinenLuokka === '-')) luokkaMatch = true;
+                if (filters.luokka_1 && toiminnallinenLuokka === '1') luokkaMatch = true;
+                if (filters.luokka_2 && toiminnallinenLuokka === '2') luokkaMatch = true;
+                if (filters.luokka_3 && toiminnallinenLuokka === '3') luokkaMatch = true;
+                if (filters.luokka_4 && toiminnallinenLuokka === '4') luokkaMatch = true;
+                if (filters.luokka_5 && toiminnallinenLuokka === '5') luokkaMatch = true;
+                if (filters.luokka_6 && toiminnallinenLuokka === '6') luokkaMatch = true;
+                if (filters.luokka_7 && toiminnallinenLuokka === '7') luokkaMatch = true;
+                if (filters.luokka_8 && toiminnallinenLuokka === '8') luokkaMatch = true;
+                if (filters.luokka_9 && toiminnallinenLuokka === '9') luokkaMatch = true;
+
+                // Return true if both filters match (or if no filters are selected)
+                const anyToimenpideSelected = filters.empty || filters.ei_toimenpiteita || filters.korjausehdotus || 
+                                            filters.raportoitu || filters.korjattu || filters.jatkoseuranta;
+                const anyLuokkaSelected = filters.luokka_empty || filters.luokka_1 || filters.luokka_2 || 
+                                        filters.luokka_3 || filters.luokka_4 || filters.luokka_5 || 
+                                        filters.luokka_6 || filters.luokka_7 || filters.luokka_8 || filters.luokka_9;
+
+                if (!anyToimenpideSelected && !anyLuokkaSelected) return false;
+                if (anyToimenpideSelected && !anyLuokkaSelected) return toimenpideMatch;
+                if (!anyToimenpideSelected && anyLuokkaSelected) return luokkaMatch;
+                return toimenpideMatch && luokkaMatch;
+            });
+        }
+
+        function generateKML(data) {
+            const filteredData = getFilteredDataForKML(data);
+
+            if (filteredData.length === 0) {
+                alert('Ei valittuja sijainteja vietävänä KML-tiedostoon. Valitse vähintään yksi suodatin.');
+                return null;
+            }
+
+            let kml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+            kml += '<kml xmlns="http://www.opengis.net/kml/2.2">\n';
+            kml += '  <Document>\n';
+            kml += '    <name>Suodatetut sijainnit</name>\n';
+            kml += '    <description>Koordinaatit valittujen suodattimien mukaan</description>\n';
+
+            // Get KML options
+            const showPlaceName = document.getElementById('kml_name_place')?.checked || false;
+            const showDistance = document.getElementById('kml_show_distance')?.checked || false;
+            const showToiminnallinenLuokka = document.getElementById('kml_show_luokka')?.checked || false;
+
+            filteredData.forEach(item => {
+                let displayName = '.';
+
+                if (showPlaceName) {
+                    let placeName = '';
+                    if (item.katuFIN && item.kaupunkiFIN) {
+                        placeName = `${item.katuFIN}, ${item.kaupunkiFIN}`;
+                    } else if (item.katuFIN) {
+                        placeName = item.katuFIN;
+                    } else if (item.kaupunkiFIN) {
+                        placeName = item.kaupunkiFIN;
+                    } else {
+                        placeName = `Coordinate ${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}`;
+                    }
+
+                    // Add functional class number after place name if available
+                    const luokkaNumber = (item.toiminnallinenLuokka || '').toString().trim();
+                    if (luokkaNumber && luokkaNumber !== '' && luokkaNumber !== '-') {
+                        placeName += ` - ${luokkaNumber}`;
+                    }
+
+                    displayName = placeName.replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&apos;');
+                }
+
+                let description = '';
+                const descriptionParts = [];
+                
+                if (showDistance) {
+                    descriptionParts.push(`Etäisyys: ${item.distance.toFixed(2)} km`);
+                }
+                
+                if (showToiminnallinenLuokka) {
+                    const luokkaDescription = getToiminnallinenLuokkaDescription(item.toiminnallinenLuokka);
+                    descriptionParts.push(luokkaDescription);
+                }
+                
+                description = descriptionParts.join(' | ');
+
+                kml += '    <Placemark>\n';
+                kml += `      <name>${displayName}</name>\n`;
+                kml += `      <description>${description}</description>\n`;
+                kml += '      <Point>\n';
+                kml += `        <coordinates>${item.lon.toFixed(6)},${item.lat.toFixed(6)},0</coordinates>\n`;
+                kml += '      </Point>\n';
+                kml += '    </Placemark>\n';
+            });
+
+            kml += '  </Document>\n';
+            kml += '</kml>';
+
+            return { kml, count: filteredData.length };
+        }
+
+        function downloadKML() {
+            if (currentFilteredData.length === 0) {
+                alert('Ei tuloksia vietävänä. Suorita ensin analyysi.');
+                return;
+            }
+
+            const result = generateKML(currentFilteredData);
+            if (!result) return;
+
+            const blob = new Blob([result.kml], { type: 'application/vnd.google-earth.kml+xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `suodatetut_sijainnit_${new Date().toISOString().split('T')[0]}.kml`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            alert(`KML-tiedosto ladattu! Sisältää ${result.count} sijaintia.`);
+        }
+
+        async function analyzeFile() {
+            const fileInput = document.getElementById('fileInput');
+            const refLat = parseFloat(document.getElementById('refLat').value);
+            const refLon = parseFloat(document.getElementById('refLon').value);
+            const maxDistance = parseFloat(document.getElementById('maxDistance').value);
+            const resultsDiv = document.getElementById('results');
+
+            // Validation
+            if (!fileInput.files[0]) {
+                resultsDiv.innerHTML = '<div class="error">❌ Ole hyvä ja valitse XLSM-tiedosto</div>';
+                return;
+            }
+
+            if (isNaN(refLat) || isNaN(refLon)) {
+                resultsDiv.innerHTML = '<div class="error">❌ Ole hyvä ja syötä kelvot vertailukoordinaatit</div>';
+                return;
+            }
+
+            resultsDiv.innerHTML = '<div class="loading">🔄 Käsitellään tiedostoa...</div>';
+
+            try {
+                // Extract coordinates from file
+                extractedData = await processExcelFile(fileInput.files[0]);
+
+                if (extractedData.length === 0) {
+                    resultsDiv.innerHTML = '<div class="error">❌ Tiedostosta ei löytynyt koordinaatteja. Varmista, että URL:t sisältävät &lat= ja &lon= parametrit.</div>';
+                    return;
+                }
+
+                // Calculate distances
+                const dataWithDistances = extractedData.map(item => ({
+                    ...item,
+                    distance: calculateDistance(refLat, refLon, item.lat, item.lon)
+                }));
+
+                // Filter by max distance and sort
+                const filteredData = dataWithDistances
+                    .filter(item => item.distance <= maxDistance)
+                    .sort((a, b) => a.distance - b.distance);
+
+                // Store current filtered data for KML export
+                currentFilteredData = filteredData;
+
+                // Display results
+                displayResults(filteredData, extractedData.length, refLat, refLon, maxDistance);
+
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error">❌ Virhe tiedoston käsittelyssä: ${error.message}</div>`;
+            }
+        }
+
+        // Display results
+        function displayResults(filteredData, totalFound, refLat, refLon, maxDistance) {
+            const resultsDiv = document.getElementById('results');
+
+            // Count each type for display
+            const counts = {
+                empty: filteredData.filter(item => {
+                    const toimenpide = (item.toimenpide || '').trim();
+                    return toimenpide === '' || toimenpide === '-';
+                }).length,
+                ei_toimenpiteita: filteredData.filter(item => (item.toimenpide || '').trim() === 'Ei toimenpiteitä').length,
+                korjausehdotus: filteredData.filter(item => (item.toimenpide || '').trim() === 'Korjausehdotus WME').length,
+                raportoitu: filteredData.filter(item => (item.toimenpide || '').trim() === 'Raportoitu WEB käyttöliittymässä').length,
+                korjattu: filteredData.filter(item => (item.toimenpide || '').trim() === 'Korjattu WME').length,
+                jatkoseuranta: filteredData.filter(item => (item.toimenpide || '').trim() === 'Jatkoseuranta').length,
+                // Toiminnallinen luokka counts
+                luokka_empty: filteredData.filter(item => {
+                    const luokka = (item.toiminnallinenLuokka || '').toString().trim();
+                    return luokka === '' || luokka === '-';
+                }).length,
+                luokka_1: filteredData.filter(item => (item.toiminnallinenLuokka || '').toString().trim() === '1').length,
+                luokka_2: filteredData.filter(item => (item.toiminnallinenLuokka || '').toString().trim() === '2').length,
+                luokka_3: filteredData.filter(item => (item.toiminnallinenLuokka || '').toString().trim() === '3').length,
+                luokka_4: filteredData.filter(item => (item.toiminnallinenLuokka || '').toString().trim() === '4').length,
+                luokka_5: filteredData.filter(item => (item.toiminnallinenLuokka || '').toString().trim() === '5').length,
+                luokka_6: filteredData.filter(item => (item.toiminnallinenLuokka || '').toString().trim() === '6').length,
+                luokka_7: filteredData.filter(item => (item.toiminnallinenLuokka || '').toString().trim() === '7').length,
+                luokka_8: filteredData.filter(item => (item.toiminnallinenLuokka || '').toString().trim() === '8').length,
+                luokka_9: filteredData.filter(item => (item.toiminnallinenLuokka || '').toString().trim() === '9').length
+            };
+
+            const statsHtml = `
+                <div class="stats">
+                    <div class="stat-card">
+                        <div class="stat-value">${totalFound}</div>
+                        <div class="stat-label">Koordinaatteja yhteensä</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${filteredData.length}</div>
+                        <div class="stat-label">${maxDistance}km sisällä</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${filteredData.length > 0 ? filteredData[0].distance.toFixed(2) : 'Ei tulosta'}</div>
+                        <div class="stat-label">Lähin etäisyys (km)</div>
+                    </div>
+                </div>
+            `;
+
+            const exportHtml = `
+                <div class="export-section">
+                    <div class="export-info" style="margin-bottom: 15px;">
+                        📁 Valitse vietävät tyypit KML-tiedostoon:
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <div style="font-weight: 600; margin-bottom: 10px; color: #2d3748;">🔧 Toimenpide-suodattimet:</div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="filter_empty" onchange="updateKMLCount()" checked>
+                                <span>Tyhjä/- (<span id="count_empty">0</span>)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="filter_ei_toimenpiteita" onchange="updateKMLCount()">
+                                <span>Ei toimenpiteitä (<span id="count_ei_toimenpiteita">0</span>)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="filter_korjausehdotus" onchange="updateKMLCount()">
+                                <span>Korjausehdotus (<span id="count_korjausehdotus">0</span>)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="filter_raportoitu" onchange="updateKMLCount()">
+                                <span>Raportoitu WEB (<span id="count_raportoitu">0</span>)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="filter_korjattu" onchange="updateKMLCount()">
+                                <span>Korjattu WME (<span id="count_korjattu">0</span>)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="filter_jatkoseuranta" onchange="updateKMLCount()">
+                                <span>Jatkoseuranta (<span id="count_jatkoseuranta">0</span>)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <div style="font-weight: 600; margin-bottom: 10px; color: #2d3748;">🏗️ Toiminnallinen luokka -suodattimet:</div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="filter_luokka_empty" onchange="updateKMLCount()">
+                                <span>Tyhjä (<span id="count_luokka_empty">0</span>)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="filter_luokka_1" onchange="updateKMLCount()">
+                                <span>Luokka 1 (<span id="count_luokka_1">0</span>)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="filter_luokka_2" onchange="updateKMLCount()">
+                                <span>Luokka 2 (<span id="count_luokka_2">0</span>)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="filter_luokka_3" onchange="updateKMLCount()">
+                                <span>Luokka 3 (<span id="count_luokka_3">0</span>)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="filter_luokka_4" onchange="updateKMLCount()">
+                                <span>Luokka 4 (<span id="count_luokka_4">0</span>)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="filter_luokka_5" onchange="updateKMLCount()">
+                                <span>Luokka 5 (<span id="count_luokka_5">0</span>)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="filter_luokka_6" onchange="updateKMLCount()">
+                                <span>Luokka 6 (<span id="count_luokka_6">0</span>)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="filter_luokka_7" onchange="updateKMLCount()">
+                                <span>Luokka 7 (<span id="count_luokka_7">0</span>)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="filter_luokka_8" onchange="updateKMLCount()">
+                                <span>Luokka 8 (<span id="count_luokka_8">0</span>)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="filter_luokka_9" onchange="updateKMLCount()">
+                                <span>Luokka 9 (<span id="count_luokka_9">0</span>)</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div style="border-top: 1px solid #cbd5e0; padding-top: 15px; margin-bottom: 15px;">
+                        <div style="margin-bottom: 10px; font-weight: 600; color: #2d3748;">⚙️ KML-asetukset:</div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="radio" name="kml_name_option" id="kml_name_dot" value="dot">
+                                <span>Näytä vain piste (.)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="radio" name="kml_name_option" id="kml_name_place" value="place" checked>
+                                <span>Näytä paikannimi</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="kml_show_distance">
+                                <span>Näytä etäisyys kuvauksessa</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="kml_show_luokka" checked>
+                                <span>Näytä toiminnallinen luokka kuvauksessa</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="export-buttons">
+                        <div class="export-info">
+                            📥 Valitut sijainnit: <strong><span id="kml_count">0</span></strong>
+                        </div>
+                        <button class="kml-button" onclick="downloadKML()" id="kml_download_btn">
+                            📥 Lataa KML
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            let tableHtml = '';
+            if (filteredData.length > 0) {
+                tableHtml = `
+                    <div class="results-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>🏃‍♂️ Sija</th>
+                                    <th>📍 Koordinaatit</th>
+                                    <th>📏 Etäisyys (km)</th>
+                                    <th>🏙️ Kaupunki FIN</th>
+                                    <th>🛣️ Katu FIN</th>
+                                    <th>🏙️ Kaupunki SWE</th>
+                                    <th>🛣️ Katu SWE</th>
+                                    <th>✅ Toimenpide</th>
+                                    <th>🏗️ Toiminnallinen luokka</th>
+                                    <th>🔗 WME URL</th>
+                                    <th>🌐 MML URL</th>
+                                    <th>📄 Sijainti tiedostossa</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${filteredData.map((item, index) => `
+                                    <tr>
+                                        <td><strong>#${index + 1}</strong></td>
+                                        <td class="coordinates">${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}</td>
+                                        <td class="distance">${item.distance.toFixed(2)} km</td>
+                                        <td>${item.kaupunkiFIN || '-'}</td>
+                                        <td>${item.katuFIN || '-'}</td>
+                                        <td>${item.kaupunkiSWE || '-'}</td>
+                                        <td>${item.katuSWE || '-'}</td>
+                                        <td>${item.toimenpide || "-"}</td>
+                                        <td>${item.toiminnallinenLuokka || "-"}</td>
+                                        <td style="max-width: 200px; word-break: break-all; font-size: 0.8em;">${makeClickableUrl(item.originalText)}</td>
+                                        <td style="max-width: 200px; word-break: break-all; font-size: 0.8em;">${makeClickableUrl(item.adjacentUrl)}</td>
+                                        <td>${item.col}${item.row}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } else {
+                tableHtml = '<div class="error">🔍 Määritetyn etäisyyden sisältä ei löytynyt sijainteja</div>';
+            }
+
+            resultsDiv.innerHTML = statsHtml + exportHtml + tableHtml;
+
+            // Update counts in the filter labels
+            document.getElementById('count_empty').textContent = counts.empty;
+            document.getElementById('count_ei_toimenpiteita').textContent = counts.ei_toimenpiteita;
+            document.getElementById('count_korjausehdotus').textContent = counts.korjausehdotus;
+            document.getElementById('count_raportoitu').textContent = counts.raportoitu;
+            document.getElementById('count_korjattu').textContent = counts.korjattu;
+            document.getElementById('count_jatkoseuranta').textContent = counts.jatkoseuranta;
+            
+            // Update toiminnallinen luokka counts
+            document.getElementById('count_luokka_empty').textContent = counts.luokka_empty;
+            document.getElementById('count_luokka_1').textContent = counts.luokka_1;
+            document.getElementById('count_luokka_2').textContent = counts.luokka_2;
+            document.getElementById('count_luokka_3').textContent = counts.luokka_3;
+            document.getElementById('count_luokka_4').textContent = counts.luokka_4;
+            document.getElementById('count_luokka_5').textContent = counts.luokka_5;
+            document.getElementById('count_luokka_6').textContent = counts.luokka_6;
+            document.getElementById('count_luokka_7').textContent = counts.luokka_7;
+            document.getElementById('count_luokka_8').textContent = counts.luokka_8;
+            document.getElementById('count_luokka_9').textContent = counts.luokka_9;
+
+            // Update KML count
+            updateKMLCount();
+        }
+    </script>
+</body>
+
+</html>
