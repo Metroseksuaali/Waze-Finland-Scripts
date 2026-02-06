@@ -9,7 +9,7 @@
 ## Skriptit
 
 ### WME Polygon Validator
-**Versio:** 1.1.0 | **Tekijä:** Metro
+**Versio:** 1.1.0 | **Tekijä:** Metroseksuaali
 
 Reaaliaikainen varoitusjärjestelmä, joka havaitsee virheelliset (itseään leikkaavat) polygonit WME:ssä muokkaamisen aikana. Skripti käyttää turf.js-kirjastoa geometrian validointiin ja näyttää punaiset merkit leikkauspisteiden kohdalla.
 
