@@ -1,16 +1,21 @@
 // ==UserScript==
 // @name         WME MML-katutarkistus
 // @namespace    wme-mml-tarkistus
-// @version      0.5.2
-// @description  Tarkistaa WME-näkymän katunimet MML:n geokoodausrajapinnasta ja korostaa segmentit, joiden katua ei löydy virallisesta tieosoiteaineistosta.
+// @version      0.6.1
+// @description  Tarkistaa WME-näkymän katunimet MML:n geokoodausrajapinnasta ja korostaa segmentit, joiden katua ei löydy virallisesta kartta-aineistosta.
 // @author       Sam
 // @match        https://www.waze.com/*editor*
 // @match        https://beta.waze.com/*editor*
 // @exclude      https://www.waze.com/user/editor*
+// @updateURL    https://raw.githubusercontent.com/Metroseksuaali/Waze-Finland-Scripts/main/scripts/mml-katutarkistus/wme-mml-katutarkistus.user.js
+// @downloadURL  https://raw.githubusercontent.com/Metroseksuaali/Waze-Finland-Scripts/main/scripts/mml-katutarkistus/wme-mml-katutarkistus.user.js
+// @require      https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.2/proj4.js
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_info
 // @connect      avoin-paikkatieto.maanmittauslaitos.fi
+// @connect      aineistopalaute.maanmittauslaitos.fi
 // @run-at       document-end
 // ==/UserScript==
 
@@ -22,17 +27,38 @@
  *  2. Jokaisesta segmentistä poimitaan katunimi(en) + kaupunki -parit
  *     (ensisijainen nimi + vaihtoehtoiset nimet, "270 - Nimi" pilkotaan osiin).
  *  3. Uniikit (kaupunki|katu) -parit kysytään MML:n geokoodauksesta
- *     (interpolated-road-addresses) viidellä rinnakkaisella kyselyllä.
+ *     (interpolated-road-addresses) kymmenellä rinnakkaisella kyselyllä.
  *     Tulokset välimuistiin (30 pv) avaimella kaupunki|katu, joten sama katu
  *     kysytään MML:stä vain kerran riippumatta zoomista ja panoroinnista.
  *  4. Segmentit, joiden yksikään nimi ei löydy MML:stä, korostetaan kartalla
- *     ja listataan sivupaneeliin. Kuntavertailu hyväksyy sekä suomen- että
- *     ruotsinkielisen kuntanimen (kuntanimiFin / kuntanimiSwe).
+ *     ja listataan sivupaneeliin. Vain Suomessa olevat tiet tarkistetaan
+ *     (kadun kaupungin countryID). Katunimen täsmäys riittää - tie voi
+ *     normaalisti sijaita toisen kunnan alueella.
+ *  5. Havainnon voi ilmoittaa MML:lle suoraan listariviltä tai markerin
+ *     popupista: "Ilmoita MML:lle" avaa esitäytetyn palautelomakkeen, joka
+ *     lähetetään Aineistopalauterajapintaan (XML, HTTP POST, EPSG:3067).
+ *
+ * Sisältää Maanmittauslaitoksen avoimen tietoaineiston tietoja
+ * (geokoodauspalvelu), lisenssi CC BY 4.0:
+ * https://www.maanmittauslaitos.fi/avoindata-lisenssi-cc40
  *
  * Huom: "ei löydy MML:stä" on vihje, ei tuomio - yksityistiet ja uudet kadut
- * voivat puuttua virallisesta aineistosta vaikka Waze-data on oikein.
+ * voivat puuttua virallisesta kartta-aineistosta vaikka Waze-data on oikein.
+ * Ilmoita MML:lle vain havaintoja, jotka olet varmistanut.
  *
  * Versiohistoria:
+ *  0.6.1 - Yhtenäistys: versio luetaan headerista (GM_info), Ilmoita-napin
+ *          teksti sama kaikkialla, käyttöliittymän sanamuodot yhtenäistetty
+ *          (kartta-aineisto), kuvauskentän ohjeteksti, vanhentuneet kommentit.
+ *  0.6.0 - MML-palaute: "Ilmoita MML:lle" avaa esitäytetyn palautelomakkeen
+ *          listariviltä ja markerin popupista, lähetys Aineistopalaute-
+ *          rajapintaan (XML, HTTP POST, EPSG:3067; testitila oletuksena,
+ *          yhteystiedot muistetaan). Koordinaattimuunnos proj4js:llä
+ *          (varakaava jos ei lataudu), täydet metrit. Oma salmiakkimarkeri
+ *          erottumaan muista lisäosista. CC BY 4.0 -attribuutio paneeliin ja
+ *          popupiin. Vain Suomessa olevat tiet tarkistetaan (kaupungin
+ *          countryID). "Eri kunnassa" -tila poistettu - katunimen täsmäys
+ *          riittää, tie voi olla toisen kunnan alueella.
  *  0.5.2 - Marker segmentin todelliseen keskikohtaan viivaa pitkin, jotta se
  *          ei osu nodeen (2 pisteen segmentillä osui aiemmin päätepisteeseen).
  *  0.5.1 - Markerin klikkaus valitsee kadun segmentit WME:ssä popupin lisäksi.
@@ -57,7 +83,10 @@
   'use strict';
 
   const SCRIPT_NAME = 'MML-katutarkistus';
-  const SCRIPT_VERSION = '0.5.2';
+  // Versio luetaan headerin @version-rivistä (GM_info), jotta numero
+  // ylläpidetään vain yhdessä paikassa. Varakeino jos GM_info ei saatavilla.
+  const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version)
+    ? GM_info.script.version : '0.6.0';
   const CLIENT_ID = `WME-MML-katutarkistus/${SCRIPT_VERSION} (Tampermonkey userscript; Waze Map Editor)`;
   const MML_BASE = 'https://avoin-paikkatieto.maanmittauslaitos.fi/geocoding/v2/pelias/search';
   const CACHE_KEY = 'mml_katu_cache_v1';
@@ -68,6 +97,23 @@
   const CONCURRENCY = 10;                         // rinnakkaiset MML-kyselyt
   const AUTOCHECK_DEBOUNCE_MS = 1500;             // odotus kartan pysähtymisen jälkeen
   const AUTOCHECK_MIN_ZOOM = 14;                  // automaattitarkistuksen zoomiraja
+
+  // MML Aineistopalauterajapinta - palaute XML-viestinä HTTP POST -kutsuna.
+  // Tekninen kuvaus: https://www.maanmittauslaitos.fi/aineistopalauterajapinta/tekninen-kuvaus
+  // Testiversio validoi sanoman mutta ei tallenna palautetta.
+  const PALAUTE_URL_PROD = 'https://aineistopalaute.maanmittauslaitos.fi/api/v1/palaute';
+  const PALAUTE_URL_TEST = 'https://aineistopalaute.maanmittauslaitos.fi/apitest/v1/palaute';
+  const PALAUTE_EMAIL_KEY = 'mml_palaute_email_v1';
+  const PALAUTE_PHONE_KEY = 'mml_palaute_phone_v1';
+  const PALAUTE_TEST_KEY = 'mml_palaute_test_v1';
+
+  // MML:n avoimen datan lisenssi (CC BY 4.0) - attribuutio näytetään
+  // paneelissa ja popupissa lisenssiehtojen mukaisesti.
+  const MML_LICENCE_URL = 'https://www.maanmittauslaitos.fi/avoindata-lisenssi-cc40';
+
+  // Vain Suomessa olevat tiet tarkistetaan. Maa päätellään kadun kaupungin
+  // countryID:stä; jos countryID puuttuu, tietä ei tarkisteta.
+  const FINLAND_COUNTRY_ID = 251;
 
   // Junaradat, lautat ja portaat ohitetaan aina, eivät näy asetuksissa.
   const ALWAYS_EXCLUDED = new Set([15, 16, 18]);
@@ -91,7 +137,7 @@
     { id: 22, label: 'Kuja / kapea katu',        def: true  },
   ];
 
-  // Tilat: 'found' | 'notfound' | 'wrongcity' | 'error'
+  // Tilat: 'found' | 'notfound' | 'error'
   let cache = {};
   let roadTypeSettings = {};
   let autoCheckEnabled = false;
@@ -162,6 +208,78 @@
     return out;
   }
 
+  // WGS84 -> ETRS-TM35FIN (EPSG:3067).
+  // Ensisijaisesti proj4js (@require). Varamekanismina käsinkirjoitettu
+  // UTM-sarjakehitelmä, jos proj4 ei jostain syystä latautunut.
+  // Tulos pyöristetään täysiin metreihin.
+  const PROJ4_EPSG3067 = '+proj=utm +zone=35 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs';
+  let proj4Ready = false;
+  try {
+    if (typeof proj4 === 'function') {
+      proj4.defs('EPSG:3067', PROJ4_EPSG3067);
+      proj4Ready = true;
+    }
+  } catch (e) { /* varamekanismi hoitaa */ }
+
+  function wgs84ToETRSTM35FIN(lat, lon) {
+    const roundM = v => Math.round(v); // täydet metrit
+
+    if (proj4Ready) {
+      try {
+        const [e, n] = proj4('EPSG:4326', 'EPSG:3067', [lon, lat]);
+        return { x: roundM(e), y: roundM(n) };
+      } catch (err) {
+        log('proj4-muunnos epäonnistui, käytetään varakaavaa', err);
+      }
+    }
+
+    // Varamekanismi: standardi UTM-sarjakehitelmä, kaista 35,
+    // keskimeridiaani 27°E, GRS80-ellipsoidi.
+    const latRad = lat * Math.PI / 180;
+    const lonRad = lon * Math.PI / 180;
+    const lon0 = 27 * Math.PI / 180;
+    const k0 = 0.9996;
+    const a = 6378137;
+    const e2 = 0.00669438002290;
+    const e4 = e2 * e2;
+    const e6 = e4 * e2;
+    const sinLat = Math.sin(latRad);
+    const cosLat = Math.cos(latRad);
+    const N = a / Math.sqrt(1 - e2 * sinLat * sinLat);
+    const T = Math.tan(latRad) * Math.tan(latRad);
+    const C = e2 * cosLat * cosLat / (1 - e2);
+    const A = cosLat * (lonRad - lon0);
+    const M = a * (
+      (1 - e2 / 4 - 3 * e4 / 64 - 5 * e6 / 256) * latRad -
+      (3 * e2 / 8 + 3 * e4 / 32 + 45 * e6 / 1024) * Math.sin(2 * latRad) +
+      (15 * e4 / 256 + 45 * e6 / 1024) * Math.sin(4 * latRad) -
+      (35 * e6 / 3072) * Math.sin(6 * latRad)
+    );
+    const x = 500000 + k0 * N * (
+      A +
+      (1 - T + C) * Math.pow(A, 3) / 6 +
+      (5 - 18 * T + T * T + 72 * C - 58 * e2) * Math.pow(A, 5) / 120
+    );
+    const y = k0 * (
+      M +
+      N * Math.tan(latRad) * (
+        Math.pow(A, 2) / 2 +
+        (5 - T + 9 * C + 4 * C * C) * Math.pow(A, 4) / 24 +
+        (61 - 58 * T + T * T + 600 * C - 330 * e2) * Math.pow(A, 6) / 720
+      )
+    );
+    return { x: roundM(x), y: roundM(y) };
+  }
+
+  function xmlEscape(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+  }
+
   /* ------------------------------------------------ WME-datamallin luenta */
 
   function getModel() {
@@ -229,6 +347,9 @@
         const city = W.model.cities.getObjectById(sa.cityID);
         const cityName = city && city.attributes ? city.attributes.name : '';
         if (!cityName) continue; // ilman kaupunkia ei voi verrata MML:ään
+        // Vain Suomessa olevat tiet: countryID puuttuu -> ei tarkisteta
+        const countryID = city.attributes.countryID;
+        if (countryID !== FINLAND_COUNTRY_ID) continue;
         const candidates = nameCandidates(sa.name);
         if (!candidates.length) continue;
         items.push({ seg, segId: a.id, streetName: sa.name, cityName, candidates });
@@ -262,13 +383,10 @@
             const feats = (data && data.features) || [];
             if (!feats.length) { resolve('notfound'); return; }
             const p = feats[0].properties || {};
-            const cityLc = city.toLowerCase();
+            // Katunimen täsmäys riittää; tie voi normaalisti olla toisen
+            // kunnan alueella, joten kuntaa ei verrata.
             const nameOk = (p.katunimi || '').toLowerCase() === street.toLowerCase();
-            const cityOk = (p.kuntanimiFin || '').toLowerCase() === cityLc
-                        || (p.kuntanimiSwe || '').toLowerCase() === cityLc;
-            if (nameOk && cityOk) resolve('found');
-            else if (nameOk && !cityOk) resolve('wrongcity');
-            else resolve('notfound');
+            resolve(nameOk ? 'found' : 'notfound');
           } catch (e) {
             log('MML-vastauksen käsittely epäonnistui', e);
             resolve('error');
@@ -278,6 +396,267 @@
         ontimeout: () => resolve('error'),
         timeout: 15000,
       });
+    });
+  }
+
+  /* ---------------------------------------- MML-palautteen lähetys (XML) */
+
+  function buildPalauteXML(data) {
+    const lines = [];
+    lines.push('<?xml version="1.0" encoding="UTF-8"?>');
+    lines.push('<ap:Aineistopalaute xmlns:ap="http://xml.nls.fi/Maasto/Palaute/2011/08/01"');
+    lines.push('    xmlns:gml="http://www.opengis.net/gml"');
+    lines.push('    xmlns:jhs="http://skeemat.jhs-suositukset.fi/yhteiset/2009/10/19"');
+    lines.push('    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"');
+    lines.push('    xsi:schemaLocation="http://xml.nls.fi/Maasto/Palaute/2011/08/01/aineistopalaute.xsd">');
+    lines.push('  <ap:LahetysHetki>' + new Date().toISOString() + '</ap:LahetysHetki>');
+    lines.push('  <ap:MaastokohdeNimi>' + xmlEscape(data.kohde) + '</ap:MaastokohdeNimi>');
+    if (data.kuvaus) lines.push('  <ap:KuvausTeksti>' + xmlEscape(data.kuvaus) + '</ap:KuvausTeksti>');
+    if (data.syy) lines.push('  <ap:SyyTeksti>' + xmlEscape(data.syy) + '</ap:SyyTeksti>');
+    lines.push('  <ap:Sijainti>');
+    lines.push('    <gml:Point srsName="EPSG:3067">');
+    // Koordinaattien järjestys: itä (E) pohjoinen (N)
+    lines.push('      <gml:pos>' + data.e + ' ' + data.n + '</gml:pos>');
+    lines.push('    </gml:Point>');
+    lines.push('  </ap:Sijainti>');
+    if (data.email || data.phone) {
+      lines.push('  <ap:Yhteystiedot>');
+      if (data.email) lines.push('    <jhs:SahkopostiosoiteTeksti>' + xmlEscape(data.email) + '</jhs:SahkopostiosoiteTeksti>');
+      if (data.phone) lines.push('    <jhs:PuhelinnumeroTeksti>' + xmlEscape(data.phone) + '</jhs:PuhelinnumeroTeksti>');
+      lines.push('  </ap:Yhteystiedot>');
+    }
+    lines.push('</ap:Aineistopalaute>');
+    return lines.join('\n');
+  }
+
+  // Segmentin keskikohta WGS84-koordinaatteina (geometria on jo WGS84:ää)
+  function segMidpointWGS84(seg) {
+    const gj = segGeometry(seg);
+    if (!gj || !gj.coordinates.length) return null;
+    const pts = gj.coordinates.map(c => ({ x: c[0], y: c[1] }));
+    const mid = midpointAlong(pts);
+    return { lat: mid.y, lon: mid.x };
+  }
+
+  /* ------------------------------------------------- palautelomake (UI) */
+
+  let palauteDialog = null;
+  let palauteEls = null;
+
+  function palauteField(labelText, inputEl) {
+    const row = document.createElement('label');
+    row.style.cssText = 'display:block;margin-bottom:7px;';
+    const span = document.createElement('span');
+    span.textContent = labelText;
+    span.style.cssText = 'display:block;font-size:11px;color:#555;margin-bottom:2px;';
+    row.appendChild(span);
+    row.appendChild(inputEl);
+    return row;
+  }
+
+  function palauteInput(tag) {
+    const el = document.createElement(tag);
+    el.style.cssText =
+      'width:100%;box-sizing:border-box;padding:4px 6px;border:1px solid #bbb;'
+      + 'border-radius:4px;font:12px sans-serif;color:#222;background:#fff;';
+    return el;
+  }
+
+  function createPalauteDialog() {
+    const dlg = document.createElement('div');
+    dlg.style.cssText =
+      'position:fixed;top:90px;left:50%;transform:translateX(-50%);z-index:10002;'
+      + 'width:360px;background:#f9f9f9;border:1px solid #999;border-radius:6px;'
+      + 'padding:12px;font:12px sans-serif;color:#222;box-shadow:0 3px 12px rgba(0,0,0,.35);'
+      + 'display:none;';
+
+    const title = document.createElement('div');
+    title.textContent = 'Ilmoita havainto Maanmittauslaitokselle';
+    title.style.cssText = 'font-weight:600;margin-bottom:8px;';
+    dlg.appendChild(title);
+
+    const kohde = palauteInput('input');
+    kohde.type = 'text';
+    dlg.appendChild(palauteField('Maastokohde *', kohde));
+
+    const kuvaus = palauteInput('textarea');
+    kuvaus.rows = 8;
+    kuvaus.style.resize = 'vertical';
+    kuvaus.style.minHeight = '110px';
+    dlg.appendChild(palauteField('Kuvaus (Muokkaa sopivaksi)', kuvaus));
+
+    const syy = palauteInput('input');
+    syy.type = 'text';
+    dlg.appendChild(palauteField('Syy', syy));
+
+    const coordWrap = document.createElement('div');
+    coordWrap.style.cssText = 'display:flex;gap:8px;';
+    const eInput = palauteInput('input');
+    eInput.type = 'text';
+    const nInput = palauteInput('input');
+    nInput.type = 'text';
+    const eRow = palauteField('Itä (E)', eInput);
+    const nRow = palauteField('Pohjoinen (N)', nInput);
+    eRow.style.flex = '1';
+    nRow.style.flex = '1';
+    coordWrap.appendChild(eRow);
+    coordWrap.appendChild(nRow);
+    const coordLabel = document.createElement('div');
+    coordLabel.textContent = 'Sijainti (ETRS-TM35FIN, EPSG:3067) - esitäytetty segmentin keskikohdasta';
+    coordLabel.style.cssText = 'font-size:11px;color:#555;margin-bottom:2px;';
+    dlg.appendChild(coordLabel);
+    dlg.appendChild(coordWrap);
+
+    const email = palauteInput('input');
+    email.type = 'email';
+    email.placeholder = 'yhteydenottoa varten';
+    dlg.appendChild(palauteField('Sähköposti (valinnainen)', email));
+
+    const phone = palauteInput('input');
+    phone.type = 'tel';
+    dlg.appendChild(palauteField('Puhelinnumero (valinnainen)', phone));
+
+    const testWrap = document.createElement('label');
+    testWrap.style.cssText = 'display:flex;align-items:center;gap:6px;margin:4px 0 10px;cursor:pointer;';
+    const testCheck = document.createElement('input');
+    testCheck.type = 'checkbox';
+    const testText = document.createElement('span');
+    testText.textContent = 'Testitila - palautetta ei tallenneta MML:lle';
+    testWrap.appendChild(testCheck);
+    testWrap.appendChild(testText);
+    dlg.appendChild(testWrap);
+
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:8px;';
+    const sendBtn = document.createElement('button');
+    sendBtn.type = 'button';
+    sendBtn.textContent = 'Lähetä palaute';
+    sendBtn.className = 'btn btn-primary';
+    sendBtn.style.cssText = 'flex:1;';
+    sendBtn.addEventListener('click', () => sendPalaute());
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.textContent = 'Sulje';
+    closeBtn.className = 'btn';
+    closeBtn.addEventListener('click', () => { dlg.style.display = 'none'; });
+    btnRow.appendChild(sendBtn);
+    btnRow.appendChild(closeBtn);
+    dlg.appendChild(btnRow);
+
+    const status = document.createElement('div');
+    status.style.cssText = 'margin-top:8px;font-size:12px;min-height:15px;';
+    dlg.appendChild(status);
+
+    // MML edellyttää tietosuojaselosteen tarjoamista, kun yhteystietoja kerätään
+    const privacy = document.createElement('a');
+    privacy.href = 'https://www.maanmittauslaitos.fi/tietoa-maanmittauslaitoksesta/organisaatio/tietosuojaselosteet/asiakassuhderekisteri';
+    privacy.target = '_blank';
+    privacy.rel = 'noopener';
+    privacy.textContent = 'Seloste henkilötietojen käsittelystä (MML)';
+    privacy.style.cssText = 'display:block;margin-top:6px;font-size:11px;';
+    dlg.appendChild(privacy);
+
+    document.body.appendChild(dlg);
+    palauteDialog = dlg;
+    palauteEls = { kohde, kuvaus, syy, eInput, nInput, email, phone, testCheck, sendBtn, status };
+  }
+
+  // Esitäyttö tarkistustuloksesta.
+  // problem = { streetName, cityName, kind: 'notfound'|'error', segs: [...] }
+  function openPalauteDialog(problem) {
+    if (!palauteDialog) createPalauteDialog();
+    const els = palauteEls;
+
+    els.kohde.value = 'Tie';
+    els.kuvaus.value =
+      `Hei. Havaitsin että ${problem.streetName} (${problem.cityName}) osalta `
+      + 'Maanmittauslaitoksen kartta ei mahdollisesti täsmää todellisuuden kanssa. '
+      + 'Maastossa on tie ja mahdollisesti tien nimen osoittava nimikyltti, '
+      + 'mutta katua ei löydy vielä Maanmittauslaitoksen kartalta.\n\n'
+      + 'Tämä huomio tuli esille Waze-navigointisovelluksen karttaa editoidessa.';
+    els.syy.value = 'Kartalla oleva tieto ei vastaa todellisuutta';
+
+    const mid = segMidpointWGS84(problem.segs[0]);
+    if (mid) {
+      const c = wgs84ToETRSTM35FIN(mid.lat, mid.lon);
+      els.eInput.value = c.x;
+      els.nInput.value = c.y;
+    } else {
+      els.eInput.value = '';
+      els.nInput.value = '';
+    }
+
+    els.email.value = GM_getValue(PALAUTE_EMAIL_KEY, '');
+    els.phone.value = GM_getValue(PALAUTE_PHONE_KEY, '');
+    els.testCheck.checked = !!GM_getValue(PALAUTE_TEST_KEY, true);
+    els.status.textContent = '';
+    palauteDialog.style.display = 'block';
+  }
+
+  function sendPalaute() {
+    const els = palauteEls;
+    const kohde = els.kohde.value.trim();
+    const e = parseFloat(String(els.eInput.value).replace(',', '.'));
+    const n = parseFloat(String(els.nInput.value).replace(',', '.'));
+
+    const fail = (msg) => { els.status.textContent = msg; els.status.style.color = '#b71c1c'; };
+
+    if (!kohde) { fail('Maastokohde on pakollinen tieto.'); return; }
+    if (!isFinite(e) || !isFinite(n)) { fail('Tarkista koordinaatit - anna luvut muodossa 406916.'); return; }
+    // Karkea Suomi-tarkistus ETRS-TM35FIN-arvoille (nappaa mm. väärinpäin syötetyt E/N)
+    if (e < 40000 || e > 800000 || n < 6500000 || n > 7800000) {
+      fail('Koordinaatit eivät näytä olevan Suomessa (EPSG:3067).');
+      return;
+    }
+
+    const emailVal = els.email.value.trim();
+    const phoneVal = els.phone.value.trim();
+    GM_setValue(PALAUTE_EMAIL_KEY, emailVal);
+    GM_setValue(PALAUTE_PHONE_KEY, phoneVal);
+    GM_setValue(PALAUTE_TEST_KEY, els.testCheck.checked);
+
+    const xml = buildPalauteXML({
+      kohde,
+      kuvaus: els.kuvaus.value.trim(),
+      syy: els.syy.value,
+      e, n,
+      email: emailVal,
+      phone: phoneVal,
+    });
+
+    const isTest = els.testCheck.checked;
+    const url = isTest ? PALAUTE_URL_TEST : PALAUTE_URL_PROD;
+    log('Lähetetään palaute ->', url, '\n' + xml);
+
+    els.sendBtn.disabled = true;
+    els.status.textContent = isTest ? 'Lähetetään (testi)...' : 'Lähetetään...';
+    els.status.style.color = '#333';
+
+    GM_xmlhttpRequest({
+      method: 'POST',
+      url,
+      data: xml,
+      headers: {
+        'Content-Type': 'application/xml',
+        'User-Agent': CLIENT_ID,
+        'X-Client': CLIENT_ID,
+      },
+      timeout: 15000,
+      onload: (resp) => {
+        els.sendBtn.disabled = false;
+        if (resp.status === 202 || resp.status === 200) {
+          els.status.style.color = '#1b5e20';
+          els.status.textContent = isTest
+            ? `Testilähetys onnistui (HTTP ${resp.status}). Poista testitila lähettääksesi oikeasti.`
+            : `Palaute lähetetty Maanmittauslaitokselle (HTTP ${resp.status}).`;
+        } else {
+          fail(`Lähetys epäonnistui (HTTP ${resp.status}). `
+            + (resp.status === 400 ? 'Pyyntöviesti oli virheellinen.' : 'Yritä hetken kuluttua uudelleen.'));
+          log('Palauterajapinnan vastaus:', resp.status, resp.responseText);
+        }
+      },
+      onerror: () => { els.sendBtn.disabled = false; fail('Yhteysvirhe - palautetta ei lähetetty.'); },
+      ontimeout: () => { els.sendBtn.disabled = false; fail('Aikakatkaisu - palautetta ei lähetetty.'); },
     });
   }
 
@@ -304,7 +683,8 @@
     hideMarkerPopup();
   }
 
-  // Markerien sijainnit ja tiedot popupia varten: { x, y (karttaproj.), html }
+  // Markerien sijainnit ja tiedot popupia varten:
+  // { x, y (karttaproj.), html, segs, problem }
   const markerIndex = [];
   let popupDiv = null;
   let popupRegistered = false;
@@ -313,7 +693,7 @@
     if (popupDiv) popupDiv.style.display = 'none';
   }
 
-  function showMarkerPopup(olMap, pixel, html) {
+  function showMarkerPopup(olMap, pixel, html, problem) {
     if (!popupDiv) {
       popupDiv = document.createElement('div');
       popupDiv.style.cssText =
@@ -331,7 +711,31 @@
       popupDiv.appendChild(content);
       olMap.div.appendChild(popupDiv);
     }
-    popupDiv.querySelector('.mml-popup-content').innerHTML = html;
+    const content = popupDiv.querySelector('.mml-popup-content');
+    content.innerHTML = html;
+
+    // Raportointinappi popupiin - avaa esitäytetyn palautelomakkeen
+    if (problem) {
+      const reportBtn = document.createElement('button');
+      reportBtn.type = 'button';
+      reportBtn.textContent = 'Ilmoita MML:lle';
+      reportBtn.style.cssText =
+        'display:block;margin-top:6px;padding:3px 8px;font:11px sans-serif;'
+        + 'border:1px solid #999;border-radius:4px;background:#eee;cursor:pointer;';
+      reportBtn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        hideMarkerPopup();
+        openPalauteDialog(problem);
+      });
+      content.appendChild(reportBtn);
+    }
+
+    // CC BY 4.0 -attribuutio: vertailu perustuu MML:n avoimeen dataan
+    const attrib = document.createElement('div');
+    attrib.style.cssText = 'margin-top:5px;font-size:10px;color:#999;';
+    attrib.textContent = 'Lähde: Maanmittauslaitoksen geokoodauspalvelu (CC BY 4.0)';
+    content.appendChild(attrib);
+
     popupDiv.style.left = (pixel.x + 14) + 'px';
     popupDiv.style.top = (pixel.y - 10) + 'px';
     popupDiv.style.display = 'block';
@@ -368,7 +772,7 @@
           if (d <= bestDist) { bestDist = d; best = m; }
         }
         if (best) {
-          showMarkerPopup(olMap, e.xy, best.html);
+          showMarkerPopup(olMap, e.xy, best.html, best.problem);
           selectSegments(best.segs);
         } else {
           hideMarkerPopup();
@@ -377,6 +781,26 @@
     });
     popupRegistered = true;
     log('Marker-popupin kuuntelija rekisteröity.');
+  }
+
+  // Skriptin oma tunnusikoni: salmiakki (45 astetta käännetty pyöristetty
+  // neliö) valkoisella reunuksella ja huutomerkillä. Väri = ongelman tyyppi.
+  // Muoto erottaa markerit muiden lisäosien ympyrä- ja pin-markereista.
+  const iconCache = {};
+  function markerIcon(color) {
+    if (!iconCache[color]) {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30">'
+        + '<g transform="rotate(45 15 15)">'
+        + `<rect x="5.5" y="5.5" width="19" height="19" rx="4" fill="${color}"`
+        + ' stroke="#ffffff" stroke-width="2.5"/>'
+        + '</g>'
+        + '<text x="15" y="20" text-anchor="middle" font-family="Arial, sans-serif"'
+        + ' font-size="13" font-weight="bold" fill="#ffffff">!</text>'
+        + '</svg>';
+      iconCache[color] = 'data:image/svg+xml;base64,' + btoa(svg);
+    }
+    return iconCache[color];
   }
 
   // Laskee pisteen 50 % matkassa viivaa pitkin - ei osu koskaan
@@ -404,7 +828,7 @@
     return points[points.length - 1];
   }
 
-  function highlightSegment(seg, color, infoHtml, groupSegs) {
+  function highlightSegment(seg, color, infoHtml, groupSegs, problem) {
     const ctx = ensureLayer();
     if (!ctx) return;
     const { OpenLayers, olMap } = ctx;
@@ -429,19 +853,15 @@
       new OpenLayers.Geometry.Point(midPt.x, midPt.y)
     );
     marker.style = {
-      pointRadius: 11,
-      fillColor: color,
-      fillOpacity: 0.95,
-      strokeColor: '#ffffff',
-      strokeWidth: 2.5,
-      label: '!',
-      fontColor: '#ffffff',
-      fontWeight: 'bold',
-      fontSize: '13px',
-      labelYOffset: 1,
+      externalGraphic: markerIcon(color),
+      graphicWidth: 28,
+      graphicHeight: 28,
+      graphicOpacity: 1,
     };
 
-    if (infoHtml) markerIndex.push({ x: midPt.x, y: midPt.y, html: infoHtml, segs: groupSegs || [seg] });
+    if (infoHtml) {
+      markerIndex.push({ x: midPt.x, y: midPt.y, html: infoHtml, segs: groupSegs || [seg], problem });
+    }
 
     highlightLayer.addFeatures([feat, marker]);
   }
@@ -527,9 +947,7 @@
       for (const it of items) {
         const statuses = it.candidates.map(c => (cache[`${it.cityName}|${c}`] || {}).status || 'error');
         if (statuses.includes('found')) continue;
-        const kind = statuses.includes('wrongcity') ? 'wrongcity'
-                   : statuses.every(s => s === 'error') ? 'error'
-                   : 'notfound';
+        const kind = statuses.every(s => s === 'error') ? 'error' : 'notfound';
         const key = `${it.cityName}|${it.streetName}`;
         if (!groups.has(key)) {
           groups.set(key, { streetName: it.streetName, cityName: it.cityName, kind, segs: [] });
@@ -540,12 +958,12 @@
       const problems = [...groups.values()];
 
       // Piirrä ja listaa
-      const colors = { notfound: '#e53935', wrongcity: '#fb8c00', error: '#9e9e9e' };
-      const labels = { notfound: 'Ei löydy MML:stä', wrongcity: 'Löytyy, mutta eri kunnassa', error: 'Kyselyvirhe' };
+      const colors = { notfound: '#e53935', error: '#9e9e9e' };
+      const labels = { notfound: 'Ei löydy MML:n kartta-aineistosta', error: 'Kyselyvirhe' };
       for (const p of problems) {
         const infoHtml = `<b>${p.streetName}</b> (${p.cityName})<br>${labels[p.kind]}`
           + (p.segs.length > 1 ? `<br><span style="color:#777;">${p.segs.length} segmenttiä</span>` : '');
-        for (const s of p.segs) highlightSegment(s, colors[p.kind], infoHtml, p.segs);
+        for (const s of p.segs) highlightSegment(s, colors[p.kind], infoHtml, p.segs, p);
       }
 
       if (!problems.length) {
@@ -555,9 +973,31 @@
         for (const p of problems) {
           const li = document.createElement('li');
           li.style.cssText = 'padding:4px 6px;margin:2px 0;border-left:4px solid ' + colors[p.kind]
-            + ';cursor:pointer;background:#fff;';
+            + ';cursor:pointer;background:#fff;display:flex;align-items:center;gap:6px;';
+
+          const text = document.createElement('span');
+          text.style.cssText = 'flex:1;min-width:0;';
           const segInfo = p.segs.length > 1 ? ` — ${p.segs.length} segmenttiä` : '';
-          li.textContent = `${p.streetName} (${p.cityName}) — ${labels[p.kind]}${segInfo}`;
+          text.textContent = `${p.streetName} (${p.cityName}) — ${labels[p.kind]}${segInfo}`;
+          li.appendChild(text);
+
+          // Raportointinappi: avaa esitäytetyn MML-palautelomakkeen.
+          // Kyselyvirheelle ei tarjota ilmoitusta, koska tulos on epävarma.
+          if (p.kind !== 'error') {
+            const reportBtn = document.createElement('button');
+            reportBtn.type = 'button';
+            reportBtn.textContent = 'Ilmoita MML:lle';
+            reportBtn.title = 'Ilmoita havainto Maanmittauslaitokselle (avaa esitäytetyn palautelomakkeen)';
+            reportBtn.style.cssText =
+              'flex:none;padding:2px 7px;font:11px sans-serif;border:1px solid #999;'
+              + 'border-radius:4px;background:#eee;cursor:pointer;';
+            reportBtn.addEventListener('click', (ev) => {
+              ev.stopPropagation(); // ei keskitetä karttaa napista
+              openPalauteDialog(p);
+            });
+            li.appendChild(reportBtn);
+          }
+
           li.title = p.segs.length > 1
             ? 'Klikkaa keskittääksesi kartan; toistuvat klikkaukset kiertävät segmentit läpi'
             : 'Klikkaa keskittääksesi kartan segmenttiin';
@@ -711,7 +1151,14 @@
         <div style="margin-top:6px;color:#777;font-size:11px;">
           Avain tallentuu vain Tampermonkeyn omaan varastoon ja kulkee ainoastaan
           maanmittauslaitos.fi-kutsuissa. Punainen = katua ei löydy MML:n
-          tieosoitteista, oranssi = löytyy mutta eri kunnasta.
+          kartta-aineistosta. Mikäli epäilet että virhe on Maanmittauslaitoksen
+          aineistossa, voit halutessasi raportoida havainnon karttapalautteena
+          Ilmoita-napista.
+        </div>
+        <div style="margin-top:6px;color:#777;font-size:11px;">
+          Sisältää Maanmittauslaitoksen avoimen tietoaineiston tietoja
+          (geokoodauspalvelu), lisenssi
+          <a href="${MML_LICENCE_URL}" target="_blank" rel="noopener">CC BY 4.0</a>.
         </div>
       </div>`;
 
@@ -766,7 +1213,7 @@
     registerMarkerPopup();
 
     setStatus(panel.keyInput.value ? 'Valmiina.' : 'Syötä MML API-avain aloittaaksesi.');
-    log('Paneeli alustettu.');
+    log(`Paneeli alustettu. proj4js: ${proj4Ready ? 'käytössä' : 'EI käytössä (varakaava)'}.`);
   }
 
   /* ------------------------------------------------------------ käynnistys */

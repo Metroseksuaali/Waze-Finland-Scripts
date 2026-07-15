@@ -22,6 +22,7 @@ Lisäosa auttaa löytämään katuja, joita ei löydy MML:n virallisesta tieosoi
   - valitsee kyseisen kadun segmentit WME:ssä
 - Valinnainen automaattinen tarkistus kartan liikkuessa.
 - Tietyyppikohtaiset asetukset.
+- Mahdollisuus raportoida havainto suoraan Maanmittauslaitokselle, mikäli epäilee virheen olevan Maanmittauslaitoksen aineistossa.
 
 ---
 
@@ -37,10 +38,6 @@ Lisäosa toimii seuraavasti:
 6. Tallentaa tuloksen välimuistiin.
 7. Korostaa segmentit, joiden yksikään nimi ei tuota osumaa.
 
-Kuntavertailussa hyväksytään sekä:
-
-- `kuntanimiFin`
-- `kuntanimiSwe`
 
 ---
 
@@ -49,7 +46,6 @@ Kuntavertailussa hyväksytään sekä:
 | Väri | Merkitys |
 |--------|-----------|
 | 🔴 Punainen | Katua ei löydy MML:n tieosoiteaineistosta |
-| 🟠 Oranssi | Katu löytyy, mutta eri kunnasta |
 | ⚫ Harmaa | MML-kysely epäonnistui |
 
 Kartalle piirretään lisäksi huomiomerkki (`!`) segmentin todelliseen keskikohtaan.
@@ -66,7 +62,6 @@ Oletuksena tarkistetaan:
 - Seututie (Minor Highway)
 - Maastotie / hiekkatie
 - Yksityistie
-- Kiitotie
 - Pysäköintialueen tie
 - Kuja / kapea katu
 
@@ -77,6 +72,7 @@ Oletuksena pois käytöstä (oletusasetuksia voi muuttaa skriptin sisältä, ei 
 - Jalankulkuväylät
 - Kävelytiet
 - Polut
+- Kiitotiet
 
 Aina ohitettavat:
 
@@ -88,9 +84,9 @@ Aina ohitettavat:
 
 ## Asennus
 
-### 1. Asenna Tampermonkey
+### 1. Tarkista
 
-https://www.tampermonkey.net/
+[Aloitusopas](/Waze-Finland-Scripts/blob/main/docs/getting-started.md)
 
 ### 2. Luo MML API-avain
 
@@ -169,9 +165,17 @@ Tämän ansiosta samaa katua ei tarvitse kysyä MML:ltä uudestaan jokaisella pa
 Kun segmentin huomiomerkkiä klikataan, saman nimiset segmentit tulee valituksi ja tien päällä näytetään pop-up ruutu
 ![MML API tarkistus](segmentin-valinta.png)
 
+![Maanmittauslaitoksen karttapalaute](karttapalaute.png)
+
+
+
 
 ## Versiohistoria
-
+### 0.6.0
+-  MML-palaute: "Ilmoita MML:lle" avaa esitäytetyn palautelomakkeen listariviltä ja markerin popupista, lähetys Aineistopalaute- rajapintaan (XML, HTTP POST, EPSG:3067; testitila oletuksena,yhteystiedot muistetaan). 
+ - Uusi salmiakkimarkkeri. 
+ - CC BY 4.0 -attribuutio paneeliin ja popupiin. 
+ - Vain Suomessa olevat tiet tarkistetaan
 ### 0.5.2
 
 - Markerit sijoitetaan segmentin todelliseen keskikohtaan viivaa pitkin.
