@@ -118,3 +118,4 @@ Kiitos kaikille suomalaisen Waze-yhteisön vapaaehtoisille, jotka ovat jakaneet 
 
 - [Stemmi90](https://github.com/Stemmi90)
 - [samisepp](https://github.com/samisepp)
+- [RucaDestiny]maeklund86
