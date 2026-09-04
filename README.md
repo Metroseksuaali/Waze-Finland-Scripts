@@ -46,11 +46,11 @@ Lisää WME:hen karttatasojen overlay-toiminnon, jossa mukana Google Maps, OpenS
 ---
 
 ### WME INSPIRE Maanmittauslaitos
-**Versio:** 1.0.1 | **Tekijä:** Stemmi
+**Versio:** 1.3.4 | **Tekijä:** Stemmi
 
-Tuo Maanmittauslaitoksen INSPIRE WMS-karttatasot WME:hen. Hakee automaattisesti saatavilla olevat tasot (Administrative Units, Geographical Names, Buildings) ja tarjoaa sivupalkki-integraation sekä kelluvan pika-aktivointipaneelin tasojen hallintaan.
+Tuo Maanmittauslaitoksen INSPIRE WMS-karttatasot WME:hen. Hakee automaattisesti saatavilla olevat tasot (Administrative Units, Geographical Names, Buildings) ja tarjoaa sivupalkki-integraation sekä kelluvan pika-aktivointipaneelin tasojen hallintaan. Lisätty rakennusten osoitetiedon vihjetyökalu.
 
-**Tiedosto:** [`scripts/WME_INSPIRE_Maanmittauslaitos_1.0.1.js`](scripts/WME_INSPIRE_Maanmittauslaitos_1.0.1.js)
+**Tiedosto:** [`scripts/WME_INSPIRE_Maanmittauslaitos_1.3.4.js`](scripts/WME_INSPIRE_Maanmittauslaitos_1.3.4.js)
 
 ---
 
