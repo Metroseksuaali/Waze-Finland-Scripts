@@ -82,6 +82,26 @@ Vertaa näkyvien tie- ja katusegmenttien nimiä Maanmittauslaitoksen (MML) geoko
 
 ---
 
+### WME Digitraffic kelikamerat
+**Tekijä:** [Sam (samisepp)](https://github.com/samisepp)
+
+Editorissa näytetään kelikameroiden sijainnit. Ikonia klikkaamalla saa kelikameran kuvan näkyviin.
+
+**Tiedosto:** [Skripti](scripts/digitraffic-kelikamerat/WME-digitraffic-kelikamerat.user.js)
+**Ohjeet:** [Readme](scripts/digitraffic-kelikamerat/README-kelikamerat.md)
+
+---
+
+### WME Digitraffic muuttuvat nopeusrajoitukset ja muuttuvat varoituskyltit
+**Tekijä:** [Sam (samisepp)](https://github.com/samisepp)
+
+Editorissa näytetään muuttuvat nopeusrajoitukset sekä nopeusrajoitusten historiaa. Myös muuttuvat varoitukset (tekstitaulut). Ikonia klikkaamalla saa nopeusrajoitustiedot / varoituskyltin tiedot näkyviin
+
+**Tiedosto:** [Skripti](scripts/digitraffic-vaihtuvat-liikenneopasteet/WME-digitraffic-vaihtuvat-opasteet.user.js)
+**Ohjeet:** [Readme](scripts/digitraffic-vaihtuvat-liikenneopasteet/README-opasteet.md)
+
+---
+
 ### WME RPP Visualizer
 **Versio:** 1.1.0 | **Tekijä:** [RucaDestiny(maeklund86)](https://github.com/maeklund86)
 
